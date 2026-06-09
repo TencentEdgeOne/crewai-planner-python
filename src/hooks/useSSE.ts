@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import type { SSEEvent } from '../types';
 
 // ── localStorage history management ──
@@ -44,10 +44,11 @@ export async function removeHistory(id: string) {
 
 // ── Hook ──
 
-export function useSSE() {
-  const [events, setEvents] = useState<SSEEvent[]>([]);
+export function useSSE(onEvent: (event: SSEEvent) => void) {
   const abortRef = useRef<AbortController | null>(null);
   const conversationIdRef = useRef<string>('');
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
 
   /**
    * Send one user message — either the product name (first turn) or any
@@ -82,6 +83,7 @@ export function useSSE() {
         body: JSON.stringify({
           user_message: userMessage,
           locale,
+          ...(options?.isFirstTurn ? { is_new: true } : {}),
         }),
         signal: controller.signal,
       });
@@ -109,7 +111,7 @@ export function useSSE() {
 
           try {
             const event: SSEEvent = JSON.parse(trimmed.slice(6));
-            setEvents((prev) => [...prev, event]);
+            onEventRef.current(event);
 
             if (event.type === 'done') {
               return;
@@ -149,13 +151,12 @@ export function useSSE() {
   }, []);
 
   const resetConversation = useCallback(() => {
+    abortRef.current?.abort();
     conversationIdRef.current = '';
-    setEvents([]);
     window.history.replaceState(null, '', window.location.pathname);
   }, []);
 
   return {
-    events,
     send,
     loadHistory,
     resetConversation,

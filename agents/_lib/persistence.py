@@ -15,6 +15,10 @@ from pydantic import BaseModel
 from crewai.flow.async_feedback.types import PendingFeedbackContext
 from crewai.flow.persistence.base import FlowPersistence
 
+from .logger import create_logger
+
+_logger = create_logger("persistence")
+
 _state_store: dict[str, dict[str, Any]] = {}
 _pending_store: dict[str, tuple[dict[str, Any], PendingFeedbackContext]] = {}
 
@@ -77,7 +81,8 @@ async def load_pending_from_store(cid: str, store) -> bool:
     state_cid = cid + FLOW_STATE_SUFFIX
     try:
         messages = await store.get_messages(state_cid, limit=1, order="desc")
-    except Exception:
+    except Exception as e:
+        _logger.log(f"store.get_messages failed: {e}")
         return False
     if not messages:
         return False
@@ -93,11 +98,7 @@ async def load_pending_from_store(cid: str, store) -> bool:
 
 
 async def sync_pending_to_store(cid: str, store) -> None:
-    """Sync in-memory pending state to external store.
-
-    If pending exists: save it (append a message to virtual conversation).
-    If not: clean up the virtual conversation (flow completed or errored).
-    """
+    """Sync in-memory pending state to external store."""
     state_cid = cid + FLOW_STATE_SUFFIX
     if cid in _pending_store:
         state_data, context = _pending_store[cid]

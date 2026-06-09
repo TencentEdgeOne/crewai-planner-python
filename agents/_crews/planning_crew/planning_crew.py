@@ -75,5 +75,5 @@ class PlanningCrew:
             agents=self.agents,
             tasks=self.tasks,
             process=Process.sequential,
-            verbose=False,  # Set to True for debugging
+            verbose=True,  # Set to True for debugging
         )

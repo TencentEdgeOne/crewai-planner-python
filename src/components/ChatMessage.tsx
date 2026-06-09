@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import rehypeRaw from 'rehype-raw';
 import { AGENT_CONFIG } from '../types';
 import { t } from '../i18n';
 
@@ -126,6 +127,7 @@ export function ChatMessage({ agent, status, content }: Props) {
             <div className={isRunning ? 'cursor-blink' : ''}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkBreaks]}
+                rehypePlugins={[rehypeRaw]}
                 components={{
                   h1: ({ children }) => <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '14px 0 6px' }}>{children}</h1>,
                   h2: ({ children }) => <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: '14px 0 5px' }}>{children}</h2>,
@@ -223,7 +225,7 @@ export function OptionsCard({ choices, selected, onSelect, onDone }: OptionsCard
           }}
         >
           <span style={{ fontSize: 10, flexShrink: 0 }}>{selectedChoice?.key || '?'}.</span>
-          <span style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedChoice?.text || ''}</span>
+          <span style={{ opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(selectedChoice?.text || '').replace(/\*\*(.+?)\*\*/g, '$1')}</span>
           <span style={{ fontSize: 10, flexShrink: 0, opacity: 0.5 }}>▾</span>
         </button>
       </div>
@@ -308,7 +310,17 @@ export function OptionsCard({ choices, selected, onSelect, onDone }: OptionsCard
               >
                 {c.key}
               </span>
-              <span>{c.text}</span>
+              <span>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <>{children}</>,
+                    strong: ({ children }) => <strong style={{ fontWeight: 600 }}>{children}</strong>,
+                  }}
+                >
+                  {c.text}
+                </ReactMarkdown>
+              </span>
             </button>
           );
         })}
@@ -452,11 +464,19 @@ export function UserMessage({ content }: UserMsgProps) {
           fontSize: 13,
           lineHeight: 1.6,
           borderRadius: '12px 12px 2px 12px',
-          whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
         }}
       >
-        {content}
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkBreaks]}
+          rehypePlugins={[rehypeRaw]}
+          components={{
+            p: ({ children }) => <p style={{ margin: 0 }}>{children}</p>,
+            strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
+          }}
+        >
+          {content}
+        </ReactMarkdown>
       </div>
     </div>
   );

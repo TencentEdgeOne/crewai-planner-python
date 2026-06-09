@@ -4,6 +4,9 @@ Conversation turn endpoint (streaming). Each request resumes or starts
 a CrewAI Flow and streams agent output via SSE.
 """
 
+import os
+os.environ.setdefault('CREWAI_DISABLE_VERSION_CHECK', 'true')
+
 import asyncio
 
 from crewai.flow.async_feedback.types import HumanFeedbackPending
@@ -59,13 +62,11 @@ async def _stream_resume(flow, feedback: str) -> FlowStreamingOutput:
 
 async def handler(context):
     """POST /stream — conversation turn (streaming)."""
-    conversation_id = getattr(context, "conversation_id", None)
-    logger.log("conversationId:", conversation_id,
-               "runId:", getattr(context, "run_id", None))
 
+    conversation_id = getattr(context, "conversation_id", None)
     body = context.request.body or {}
 
-    user_message = (body.get("user_message") or body.get("product_name") or "").strip()
+    user_message = (body.get("user_message") or "").strip()
     locale = body.get("locale", "English")
     if not user_message:
         return {"status_code": 400, "body": "Missing user_message"}
@@ -81,10 +82,10 @@ async def handler(context):
     cid = conversation_id
     persistence = get_persistence()
 
+    is_new = body.get("is_new", False)
     is_resume = has_pending(cid)
-    if not is_resume:
+    if not is_resume and not is_new:
         is_resume = await load_pending_from_store(cid, store)
-    logger.log(f"turn={'resume' if is_resume else 'kickoff'} cid={cid}")
 
     async def gen():
         pending_writes: list[asyncio.Task] = []
@@ -98,20 +99,16 @@ async def handler(context):
             pending_writes.append(asyncio.create_task(_save()))
 
         try:
-            # Save user message to store.
             fire_save("user", user_message)
 
             yield context.utils.sse({"type": "flow_start"})
 
             if is_resume:
-                # ── Later turns: resume paused Flow (streaming) ──
-                # Load pending info BEFORE from_pending (which may clear it)
                 pending = persistence.load_pending_feedback(cid)
                 pending_state = pending[0] if pending else {}
 
                 flow = TurnFlow.from_pending(cid, persistence=persistence)
 
-                # Determine current phase from state
                 if pending_state.get("latest_prd"):
                     yield context.utils.sse({"type": "phase", "phase": "iterate"})
                 elif pending_state.get("_pm_ready") or pending_state.get("rounds", 0) >= 3:
@@ -119,7 +116,6 @@ async def handler(context):
                 else:
                     yield context.utils.sse({"type": "phase", "phase": "discover"})
 
-                # Append user reply to qa_history (for gather phase context).
                 if flow.state.rounds <= 3 and not flow.state.latest_prd:
                     flow.state.qa_history = (
                         flow.state.qa_history + f"\nBoss: {user_message}"
@@ -127,8 +123,8 @@ async def handler(context):
 
                 streaming = await _stream_resume(flow, user_message)
             else:
-                # ── First turn: kickoff new Flow (streaming) ──
                 flow = TurnFlow(persistence=persistence)
+
                 yield context.utils.sse({"type": "phase", "phase": "discover"})
                 streaming = await flow.kickoff_async(inputs={
                     "id": cid,
@@ -139,7 +135,7 @@ async def handler(context):
             # ── Shared streaming loop ──
             prev_agent = ""
             current_content = ""
-            agent_contents: list[str] = []  # each agent's content in order
+            agent_contents: list[str] = []
             HIDDEN_AGENT = "Product Reviewer"
 
             async for chunk in streaming:
@@ -186,7 +182,6 @@ async def handler(context):
                     options["canFinish"] = bool(flow.state.latest_prd)
                     yield context.utils.sse({"type": "options", **options})
 
-            # Wait for writes.
             if pending_writes:
                 await asyncio.gather(*pending_writes, return_exceptions=True)
 
@@ -195,6 +190,8 @@ async def handler(context):
 
         except Exception as e:
             logger.error("stream error:", str(e))
+            import traceback
+            logger.error("traceback:", traceback.format_exc())
             yield context.utils.sse({"type": "error", "message": str(e)})
             await sync_pending_to_store(cid, store)
             yield context.utils.sse({"type": "done", "status": "error"})

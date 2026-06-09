@@ -6,7 +6,7 @@ import { FlowTimeline } from './components/FlowTimeline';
 import { ChatMessage, OptionsCard, UserMessage } from './components/ChatMessage';
 import { RoleDivider } from './components/RoleDivider';
 import { ErrorMessage } from './components/ErrorMessage';
-import type { ChatItem, FlowStatus, Phase, PhaseNode } from './types';
+import type { ChatItem, FlowStatus, Phase, PhaseNode, SSEEvent } from './types';
 import { t, getLocaleName, toggleLang, onLangChange } from './i18n';
 
 // --- Phase nodes (the timeline) ---
@@ -190,8 +190,38 @@ function reducer(state: AppState, action: Action): AppState {
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
-  const { events, send, loadHistory, resetConversation } = useSSE();
-  const processedRef = useRef(0);
+
+  // SSE event handler — called directly from the stream reader, no intermediate buffer
+  const handleSSEEvent = useCallback((event: SSEEvent) => {
+    switch (event.type) {
+      case 'flow_start':
+        dispatch({ type: 'TURN_START' });
+        break;
+      case 'phase':
+        if (event.phase) dispatch({ type: 'PHASE', phase: event.phase });
+        break;
+      case 'agent_start':
+        if (event.agent) dispatch({ type: 'AGENT_START', agent: event.agent });
+        break;
+      case 'chunk':
+        if (event.agent && event.content) dispatch({ type: 'CHUNK', agent: event.agent, content: event.content });
+        break;
+      case 'agent_end':
+        if (event.agent) dispatch({ type: 'AGENT_END', agent: event.agent });
+        break;
+      case 'options':
+        if (event.choices) dispatch({ type: 'OPTIONS', choices: event.choices, canFinish: event.canFinish });
+        break;
+      case 'done':
+        dispatch({ type: 'DONE' });
+        break;
+      case 'error':
+        dispatch({ type: 'ERROR', message: event.message || 'Unknown error' });
+        break;
+    }
+  }, []);
+
+  const { send, loadHistory, resetConversation } = useSSE(handleSSEEvent);
 
   const [history, setHistory] = useState<HistoryItem[]>(getHistory);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -226,41 +256,6 @@ export default function App() {
     }
   }, [state.messages]);
 
-  // Process SSE events
-  useEffect(() => {
-    const newEvents = events.slice(processedRef.current);
-    processedRef.current = events.length;
-
-    for (const event of newEvents) {
-      switch (event.type) {
-        case 'flow_start':
-          dispatch({ type: 'TURN_START' });
-          break;
-        case 'phase':
-          if (event.phase) dispatch({ type: 'PHASE', phase: event.phase });
-          break;
-        case 'agent_start':
-          if (event.agent) dispatch({ type: 'AGENT_START', agent: event.agent });
-          break;
-        case 'chunk':
-          if (event.agent && event.content) dispatch({ type: 'CHUNK', agent: event.agent, content: event.content });
-          break;
-        case 'agent_end':
-          if (event.agent) dispatch({ type: 'AGENT_END', agent: event.agent });
-          break;
-        case 'options':
-          if (event.choices) dispatch({ type: 'OPTIONS', choices: event.choices, canFinish: event.canFinish });
-          break;
-        case 'done':
-          dispatch({ type: 'DONE' });
-          break;
-        case 'error':
-          dispatch({ type: 'ERROR', message: event.message || 'Unknown error' });
-          break;
-      }
-    }
-  }, [events]);
-
   const isFirstTurn = state.messages.length === 0;
 
   const handleSubmit = useCallback((text: string) => {
@@ -268,7 +263,6 @@ export default function App() {
     if (!isFirstTurn) {
       dispatch({ type: 'RESET' });
       resetConversation();
-      processedRef.current = 0;
     }
     dispatch({ type: 'USER_MESSAGE', content: text });
     dispatch({ type: 'TURN_START' });
@@ -280,7 +274,6 @@ export default function App() {
   const handleNewChat = useCallback(() => {
     dispatch({ type: 'RESET' });
     resetConversation();
-    processedRef.current = 0;
   }, [resetConversation]);
 
   const handleSelectOption = useCallback((key: string, text: string) => {
@@ -303,7 +296,6 @@ export default function App() {
   const handleSelectHistory = useCallback(async (id: string) => {
     setIsLoadingHistory(true);
     dispatch({ type: 'RESET' });
-    processedRef.current = 0;
     const messages = await loadHistory(id);
 
     const restored: ChatItem[] = [];
