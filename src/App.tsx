@@ -425,7 +425,7 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside
-          className="flex-shrink-0 overflow-y-auto"
+          className="flex-shrink-0 overflow-hidden"
           style={{
             width: 300,
             padding: 20,
