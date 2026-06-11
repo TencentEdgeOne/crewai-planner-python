@@ -1,4 +1,4 @@
-"""EdgeOne Pages handler — POST /stream.
+"""EdgeOne Makers handler — POST /stream.
 
 Conversation turn endpoint (streaming). Each request resumes or starts
 a CrewAI Flow and streams agent output via SSE.

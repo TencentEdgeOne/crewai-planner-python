@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from crewai.flow.flow import Flow
 
 
-class PagesAsyncProvider(HumanFeedbackProvider):
+class SSEFeedbackProvider(HumanFeedbackProvider):
     """Always pauses. The SSE response delivers the output to the user;
     the next HTTP request delivers the user's reply via resume_async."""
 
@@ -17,4 +17,4 @@ class PagesAsyncProvider(HumanFeedbackProvider):
         raise HumanFeedbackPending(context=context)
 
 
-PROVIDER = PagesAsyncProvider()
+PROVIDER = SSEFeedbackProvider()

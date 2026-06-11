@@ -31,10 +31,10 @@ def _to_dict(state) -> dict[str, Any]:
     return dict(state)
 
 
-class PagesPersistence(FlowPersistence):
+class InProcessPersistence(FlowPersistence):
     """FlowPersistence backed by process-local dicts."""
 
-    persistence_type: str = "pages-memory"
+    persistence_type: str = "in-process"
 
     def init_db(self) -> None:
         pass
@@ -55,13 +55,13 @@ class PagesPersistence(FlowPersistence):
         _pending_store.pop(flow_uuid, None)
 
 
-_INSTANCE: PagesPersistence | None = None
+_INSTANCE: InProcessPersistence | None = None
 
 
-def get_persistence() -> PagesPersistence:
+def get_persistence() -> InProcessPersistence:
     global _INSTANCE
     if _INSTANCE is None:
-        _INSTANCE = PagesPersistence()
+        _INSTANCE = InProcessPersistence()
     return _INSTANCE
 
 
