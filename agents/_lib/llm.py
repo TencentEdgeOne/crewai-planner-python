@@ -17,12 +17,15 @@ def init_llm(context_env):
     env = context_env or {}
     api_key = env.get("AI_GATEWAY_API_KEY", "")
     base_url = env.get("AI_GATEWAY_BASE_URL", "")
+    model_id = env.get("AI_GATEWAY_MODEL") or "@makers/deepseek-v4-flash"
     if not api_key or not base_url:
         raise RuntimeError("Missing AI_GATEWAY_API_KEY or AI_GATEWAY_BASE_URL")
 
+    model = f"openai/{model_id}"
+
     logger.log("Initializing LLM...")
     _llm = LLM(
-        model="openai/@makers/deepseek-v4-flash",
+        model=model,
         api_key=api_key,
         base_url=base_url,
         temperature=0,
@@ -30,7 +33,7 @@ def init_llm(context_env):
         stream=True,
     )
     _collapse_llm = LLM(
-        model="openai/@makers/deepseek-v4-flash",
+        model=model,
         api_key=api_key,
         base_url=base_url,
         temperature=0,
