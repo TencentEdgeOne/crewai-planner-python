@@ -23,6 +23,11 @@ def init_llm(context_env):
 
     model = f"openai/{model_id}"
 
+    # DeepSeek models support thinking/reasoning; disable via extra_body
+    extra_body = None
+    if "deepseek" in model.lower():
+        extra_body = {"thinking": {"type": "disabled"}}
+
     logger.log("Initializing LLM...")
     _llm = LLM(
         model=model,
@@ -31,6 +36,7 @@ def init_llm(context_env):
         temperature=0,
         timeout=300,
         stream=True,
+        extra_body=extra_body,
     )
     _collapse_llm = LLM(
         model=model,
@@ -39,6 +45,7 @@ def init_llm(context_env):
         temperature=0,
         timeout=60,
         stream=False,
+        extra_body=extra_body,
     )
     return _llm
 
